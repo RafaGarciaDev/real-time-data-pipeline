@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline de Dados em Tempo Real - Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-badge.online {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .metric-change {
+            font-size: 0.85rem;
+            color: #4caf50;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .metric-change.negative {
+            color: #f44336;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .realtime-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .error-message {
+            background: #f44336;
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: white;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metric-value {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Pipeline de Dados em Tempo Real</h1>
+            <p class="subtitle">Monitoramento e Análise de Eventos de E-commerce</p>
+            <div class="status-badge online">
+                <span class="realtime-indicator"></span>
+                Sistema Online
+            </div>
+        </header>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="metrics-grid" id="summaryMetrics">
+            <div class="loading">
+                <div class="spinner"></div>
+                Carregando métricas...
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2 class="chart-title">📊 Timeline de Eventos (24h)</h2>
+            <div id="timelineChart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2 class="chart-title">🏆 Top 10 Produtos Mais Vendidos</h2>
+            <div id="topProductsChart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2 class="chart-title">📦 Vendas por Categoria</h2>
+            <div id="categoryChart"></div>
+        </div>
+
+        <div class="chart-container">
+            <h2 class="chart-title">🎯 Distribuição de Tipos de Eventos</h2>
+            <div id="eventTypesChart"></div>
+        </div>
+
+        <footer>
+            <p>Desenvolvido com ❤️ usando Apache Kafka, Python, PostgreSQL e Plotly</p>
+            <p style="margin-top: 10px; font-size: 0.9rem;">
+                Última atualização: <span id="lastUpdate">--:--:--</span>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Configuração
+        const API_BASE_URL = window.location.origin;
+        const REFRESH_INTERVAL = 5000; // 5 segundos
+
+        // Função para formatar números
+        function formatNumber(num) {
+            return new Intl.NumberFormat('pt-BR').format(num);
+        }
+
+        // Função para formatar moeda
+        function formatCurrency(num) {
+            return new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(num);
+        }
+
+        // Função para mostrar erro
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Atualizar métricas resumidas
+        async function updateSummaryMetrics() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/metrics/summary`);
+                const data = await response.json();
+
+                const metricsHTML = `
+                    <div class="metric-card">
+                        <div class="metric-label">Total de Eventos</div>
+                        <div class="metric-value">${formatNumber(data.total_events)}</div>
+                        <div class="metric-change">↑ ${formatNumber(data.events_24h)} nas últimas 24h</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Transações</div>
+                        <div class="metric-value">${formatNumber(data.total_transactions)}</div>
+                        <div class="metric-change">Taxa de conversão: ${data.conversion_rate}%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Receita Total</div>
+                        <div class="metric-value">${formatCurrency(data.total_revenue)}</div>
+                        <div class="metric-change">↑ ${formatCurrency(data.revenue_24h)} nas últimas 24h</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Usuários Únicos</div>
+                        <div class="metric-value">${formatNumber(data.unique_users)}</div>
+                        <div class="metric-change">${formatNumber(data.unique_products)} produtos vendidos</div>
+                    </div>
+                `;
+
+                document.getElementById('summaryMetrics').innerHTML = metricsHTML;
+            } catch (error) {
+                console.error('Erro ao atualizar métricas:', error);
+                showError('Erro ao carregar métricas resumidas');
+            }
+        }
+
+        // Atualizar timeline
+        async function updateTimeline() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/metrics/timeline`);
+                const data = await response.json();
+
+                const trace1 = {
+                    x: data.map(d => new Date(d.hour)),
+                    y: data.map(d => d.events),
+                    name: 'Total de Eventos',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: '#667eea', width: 3 }
+                };
+
+                const trace2 = {
+                    x: data.map(d => new Date(d.hour)),
+                    y: data.map(d => d.purchases),
+                    name: 'Compras',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: { color: '#4caf50', width: 3 }
+                };
+
+                const layout = {
+                    hovermode: 'closest',
+                    showlegend: true,
+                    legend: { orientation: 'h', y: -0.2 },
+                    margin: { t: 20, b: 60, l: 60, r: 20 },
+                    xaxis: { title: 'Hora' },
+                    yaxis: { title: 'Quantidade' }
+                };
+
+                Plotly.newPlot('timelineChart', [trace1, trace2], layout, { responsive: true });
+            } catch (error) {
+                console.error('Erro ao atualizar timeline:', error);
+            }
+        }
+
+        // Atualizar produtos mais vendidos
+        async function updateTopProducts() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/metrics/top-products`);
+                const data = await response.json();
+
+                const trace = {
+                    x: data.map(d => d.revenue),
+                    y: data.map(d => d.name),
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: {
+                        color: '#667eea',
+                        line: { color: '#764ba2', width: 1 }
+                    },
+                    text: data.map(d => formatCurrency(d.revenue)),
+                    textposition: 'auto'
+                };
+
+                const layout = {
+                    margin: { t: 20, b: 60, l: 200, r: 20 },
+                    xaxis: { title: 'Receita (R$)' },
+                    yaxis: { autorange: 'reversed' }
+                };
+
+                Plotly.newPlot('topProductsChart', [trace], layout, { responsive: true });
+            } catch (error) {
+                console.error('Erro ao atualizar top produtos:', error);
+            }
+        }
+
+        // Atualizar categorias
+        async function updateCategories() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/metrics/by-category`);
+                const data = await response.json();
+
+                const trace = {
+                    labels: data.map(d => d.category),
+                    values: data.map(d => d.revenue),
+                    type: 'pie',
+                    hole: 0.4,
+                    marker: {
+                        colors: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b']
+                    },
+                    textinfo: 'label+percent',
+                    textposition: 'outside'
+                };
+
+                const layout = {
+                    margin: { t: 20, b: 20, l: 20, r: 20 },
+                    showlegend: true,
+                    legend: { orientation: 'h', y: -0.2 }
+                };
+
+                Plotly.newPlot('categoryChart', [trace], layout, { responsive: true });
+            } catch (error) {
+                console.error('Erro ao atualizar categorias:', error);
+            }
+        }
+
+        // Atualizar tipos de eventos
+        async function updateEventTypes() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/metrics/event-types`);
+                const data = await response.json();
+
+                const trace = {
+                    x: data.map(d => d.type),
+                    y: data.map(d => d.count),
+                    type: 'bar',
+                    marker: {
+                        color: '#4caf50',
+                        line: { color: '#388e3c', width: 1 }
+                    }
+                };
+
+                const layout = {
+                    margin: { t: 20, b: 60, l: 60, r: 20 },
+                    xaxis: { title: 'Tipo de Evento' },
+                    yaxis: { title: 'Quantidade' }
+                };
+
+                Plotly.newPlot('eventTypesChart', [trace], layout, { responsive: true });
+            } catch (error) {
+                console.error('Erro ao atualizar tipos de eventos:', error);
+            }
+        }
+
+        // Atualizar timestamp
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('pt-BR');
+        }
+
+        // Inicializar dashboard
+        async function initDashboard() {
+            await updateSummaryMetrics();
+            await updateTimeline();
+            await updateTopProducts();
+            await updateCategories();
+            await updateEventTypes();
+            updateTimestamp();
+        }
+
+        // Iniciar e configurar atualização automática
+        initDashboard();
+        setInterval(() => {
+            initDashboard();
+        }, REFRESH_INTERVAL);
+    </script>
+</body>
+</html>
